@@ -21,7 +21,8 @@ async def setup_entry(hass, fs, backfill_hours=1, **kw):
         "backfill_hours": backfill_hours}, **kw)
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    # the statistics import runs as a background task and releases the energy sensors
+    await hass.async_block_till_done(wait_background_tasks=True)
     return entry
 
 async def test_setup_backfill_paging(hass, fake_shelly):
@@ -161,3 +162,26 @@ async def test_entity_names_are_translated_to_german(hass, fake_shelly):
         "Test Netzeinspeisung saldiert",
         "Test Letzter verarbeiteter Datensatz",
     }
+
+
+async def test_last_record_sensor_is_a_diagnostic_entity(hass, fake_shelly):
+    from homeassistant.const import EntityCategory
+    from homeassistant.helpers import entity_registry as er
+
+    registry = er.async_get(hass)
+    entry = MockConfigEntry(domain=DOMAIN, title="Test", unique_id="aabbccddeeff", data={
+        "host": fake_shelly.host, "name": "Test", "username": "admin", "password": fake_shelly.password,
+        "backfill_hours": 0})
+    entry.add_to_hass(hass)
+    # An installation from before the category existed: the sensor is already registered without one.
+    registry.async_get_or_create(
+        "sensor", DOMAIN, "aabbccddeeff_last_record", config_entry=entry, suggested_object_id="test_last_record"
+    )
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    by_unique_id = {item.unique_id: item for item in er.async_entries_for_config_entry(registry, entry.entry_id)}
+    assert by_unique_id["aabbccddeeff_last_record"].entity_category is EntityCategory.DIAGNOSTIC
+    assert by_unique_id["aabbccddeeff_import"].entity_category is None
+    assert by_unique_id["aabbccddeeff_export"].entity_category is None
+    await hass.config_entries.async_unload(entry.entry_id)

@@ -1,6 +1,6 @@
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -12,13 +12,15 @@ from homeassistant.components.recorder.statistics import (
     statistics_during_period,
 )
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
+    do_adhoc_statistics,
 )
 
 from custom_components.shelly_phase_netting.const import DOMAIN
-from custom_components.shelly_phase_netting.history import build_rows
+from custom_components.shelly_phase_netting.history import async_import_series, build_rows
 
 from .test_integration import fill, setup_entry
 
@@ -64,16 +66,56 @@ def fixed_clock():
 
 def test_build_rows_uses_first_hour_as_baseline_and_leaves_cursor_hour_open():
     hourly = {0: 100.0, HOUR: 200.0, 2 * HOUR: 300.0, 3 * HOUR: 400.0}
-    rows = build_rows(hourly, cursor=3 * HOUR + 120)   # cursor is inside hour 3
+    rows = build_rows(hourly, cursor_hour=3 * HOUR)   # hour 3 is left to the recorder
     assert [int(row["start"].timestamp()) for row in rows] == [0, HOUR, 2 * HOUR]
     assert [row["sum"] for row in rows] == [0.0, 0.2, 0.5]
     assert [row["state"] for row in rows] == [0.1, 0.3, 0.6]   # counter at the end of each hour
 
 
 def test_build_rows_needs_baseline_plus_one_hour():
-    assert build_rows({}, cursor=10 * HOUR) == []
-    assert build_rows({0: 5.0}, cursor=10 * HOUR) == []
-    assert build_rows({0: 5.0, HOUR: 5.0}, cursor=HOUR + 10) == []   # only hour 0 is complete
+    assert build_rows({}, cursor_hour=10 * HOUR) == []
+    assert build_rows({0: 5.0}, cursor_hour=10 * HOUR) == []
+    assert build_rows({0: 5.0, HOUR: 5.0}, cursor_hour=HOUR) == []   # only hour 0 is complete
+
+
+async def test_imported_sums_continue_into_the_recorders_own_statistics(recorder_mock, hass, freezer):
+    """The recorder starts its own running sum at 0 with the first state; the import must line up."""
+    assert await async_setup_component(hass, "sensor", {})
+    entity_id = "sensor.continuity"
+    attributes = {"state_class": "total_increasing", "unit_of_measurement": "kWh", "device_class": "energy"}
+    cursor_hour = datetime(2026, 9, 20, 16, 0, tzinfo=timezone.utc)
+    freezer.move_to(cursor_hour + timedelta(minutes=10))
+    hourly = {int((cursor_hour + timedelta(hours=h)).timestamp()): wh
+              for h, wh in ((-5, 300.0), (-4, 1000.0), (-3, 2000.0), (-2, 1500.0), (-1, 2500.0))}
+    partial_wh = 400.0   # already counted in the cursor hour when the sensor became valid
+    rows = build_rows(hourly, int(cursor_hour.timestamp()))
+    async_import_series(hass, entity_id, rows, int(cursor_hour.timestamp()) + 20 * 60)   # slot 16:20
+    await async_wait_recording_done(hass)
+
+    # Live values: valid from 16:25 on, starting at the total counter, then growing by 10 Wh per 5 min.
+    total_kwh = (sum(hourly.values()) + partial_wh) / 1000
+    live = {minute: total_kwh + 0.01 * (minute - 25) / 5 for minute in range(25, 120, 5)}
+    for minute, value in live.items():
+        freezer.move_to(cursor_hour + timedelta(minutes=minute))
+        hass.states.async_set(entity_id, str(round(value, 6)), attributes)
+        await async_wait_recording_done(hass)
+    for minute in live:
+        do_adhoc_statistics(hass, start=cursor_hour + timedelta(minutes=minute))
+        await async_wait_recording_done(hass)
+
+    result = await get_instance(hass).async_add_executor_job(
+        statistics_during_period, hass, cursor_hour - timedelta(hours=8), None, {entity_id}, "hour", None,
+        {"change"},
+    )
+    changes = {row_start(row): row["change"] for row in result[entity_id]}
+    start = int(cursor_hour.timestamp())
+    assert min(changes.values()) >= 0, changes        # no jump backwards anywhere, also not in the first row
+    assert changes[start - 5 * HOUR] == 0             # baseline hour
+    assert changes[start - 4 * HOUR] == pytest.approx(1.0)
+    assert changes[start - HOUR] == pytest.approx(2.5)
+    # First hour compiled by the recorder: the energy counted before the sensor became valid
+    # plus what the live values added until the end of that hour (16:25 -> 16:55: +0.06 kWh).
+    assert changes[start] == pytest.approx(0.4 + 0.06)
 
 
 async def test_backfill_is_imported_as_hourly_statistics(recorder_mock, hass, enable_custom_integrations, fake_shelly):
@@ -100,6 +142,15 @@ async def test_backfill_is_imported_as_hourly_statistics(recorder_mock, hass, en
             assert row["state"] == pytest.approx(running, abs=1e-6)
             assert row["sum"] == pytest.approx(running - expected[complete[0]][index] / 1000, abs=1e-6)
         assert rows[0]["sum"] == 0
+        # The recorder's own 5-minute statistics are anchored in the slot before the first valid state.
+        anchors = await get_instance(hass).async_add_executor_job(
+            statistics_during_period,
+            hass, datetime.fromtimestamp(now - HOUR, timezone.utc), None, {entity_id}, "5minute",
+            None, {"state", "sum"},
+        )
+        assert [(row_start(row), row["state"], row["sum"]) for row in anchors[entity_id]] == [
+            (now // 300 * 300 - 300, rows[-1]["state"], rows[-1]["sum"])
+        ]
         # The live sensor continues exactly where the imported rows end.
         live = float(hass.states.get(entity_id).state)
         assert live - rows[-1]["state"] == pytest.approx(expected[current_hour][index] / 1000, abs=1e-6)
@@ -198,4 +249,101 @@ async def test_history_is_imported_after_a_staged_backfill(recorder_mock, hass, 
     complete = [hour for hour in sorted(expected) if hour < now // HOUR * HOUR]
     rows = await read_statistics(hass, IMPORT_ENTITY, first_hour)
     assert [row_start(row) for row in rows] == complete
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_statistics_stay_continuous_over_hour_changes_with_the_real_integration(
+    recorder_mock, hass, enable_custom_integrations, fake_shelly, freezer
+):
+    """Whole path: backfill, import, live polling and the recorder's own hourly compilation."""
+    fake_shelly.page_size = 1000
+    hour = datetime(2026, 9, 20, 16, 0, tzinfo=timezone.utc)
+    freezer.move_to(hour + timedelta(minutes=7, seconds=30))
+    records = fake_shelly.records
+    minute_ts = int((hour - timedelta(hours=5)).timestamp())
+    end_ts = int((hour + timedelta(minutes=7)).timestamp())
+    index = 0
+    while minute_ts < end_ts:
+        records[minute_ts] = (10, 0, 0, 4, 0, 0) if index % 5 else (0, 10, 0, 0, 0, 0)
+        index += 1
+        minute_ts += 60
+    entry = await setup_entry(hass, fake_shelly, backfill_hours=5)
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    assert coordinator.state["history_pending"] is False
+    assert hass.states.get(IMPORT_ENTITY).state != "unavailable"
+    await async_wait_recording_done(hass)
+
+    # Two more hours of live operation: one new record per minute, a poll each minute, and the
+    # recorder's 5-minute run every five minutes (which also compiles the hourly rows).
+    for minute in range(8, 130):
+        now = hour + timedelta(minutes=minute)
+        freezer.move_to(now + timedelta(seconds=30))
+        records[int((now - timedelta(minutes=1)).timestamp())] = (
+            (10, 0, 0, 4, 0, 0) if index % 5 else (0, 10, 0, 0, 0, 0)
+        )
+        index += 1
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        if minute % 5 == 0:
+            await async_wait_recording_done(hass)
+            do_adhoc_statistics(hass, start=now - timedelta(minutes=5))
+            await async_wait_recording_done(hass)
+
+    for entity_id, position in ((IMPORT_ENTITY, 0), (EXPORT_ENTITY, 1)):
+        result = await get_instance(hass).async_add_executor_job(
+            statistics_during_period, hass, hour - timedelta(hours=7), None, {entity_id}, "hour", None,
+            {"change"},
+        )
+        changes = {row_start(row): row["change"] for row in result[entity_id]}
+        assert min(changes.values()) >= 0, changes   # no jump backwards, in any hour
+        # Every hour compiled by the recorder books the energy between the last live value of the
+        # previous hour and the last live value of this hour (the last poll of an hour has seen the
+        # records up to :58); the first one starts at the counter at the beginning of its hour.
+        start = int(hour.timestamp())
+        for offset in (0, 1):   # 16:00 and 17:00
+            last_seen = start + (offset + 1) * HOUR - 2 * 60
+            lower = start if offset == 0 else start + offset * HOUR - 2 * 60
+            booked = {
+                ts: values for ts, values in records.items()
+                if (ts >= lower if offset == 0 else ts > lower) and ts <= last_seen
+            }
+            energy = sum(bucket[position] for bucket in hourly_expected(booked, 0).values()) / 1000
+            assert changes[start + offset * HOUR] == pytest.approx(energy, abs=1e-6), (entity_id, offset)
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_energy_sensors_wait_for_the_statistics_import(
+    recorder_mock, hass, enable_custom_integrations, fake_shelly
+):
+    import asyncio
+
+    release = asyncio.Event()
+
+    async def slow_import(*args, **kwargs):
+        await release.wait()
+        return True
+
+    fake_shelly.page_size = 1000
+    fill(fake_shelly, ((int(time.time()) - 3 * HOUR) // 60) * 60, 180)
+    with patch("custom_components.shelly_phase_netting.coordinator.async_import_history", slow_import):
+        entry = MockConfigEntry(
+            domain=DOMAIN, title="Test", unique_id="aabbccddeeff",
+            data={"host": fake_shelly.host, "name": "Test", "username": "admin",
+                  "password": fake_shelly.password, "backfill_hours": 3},
+        )
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()   # does not wait for the import task
+        coordinator = hass.data[DOMAIN][entry.entry_id]
+        assert coordinator.state["catch_up_pending"] is False
+        assert coordinator.state["history_pending"] is True
+        # The backfill is complete, but the anchor row does not exist yet: no valid state.
+        assert hass.states.get(IMPORT_ENTITY).state == "unavailable"
+        assert hass.states.get(EXPORT_ENTITY).state == "unavailable"
+
+        release.set()
+        await hass.async_block_till_done(wait_background_tasks=True)
+        assert coordinator.state["history_pending"] is False
+        assert hass.states.get(IMPORT_ENTITY).state != "unavailable"
+        assert hass.states.get(EXPORT_ENTITY).state != "unavailable"
     await hass.config_entries.async_unload(entry.entry_id)

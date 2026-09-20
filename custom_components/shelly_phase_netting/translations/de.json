@@ -19,17 +19,28 @@
           "username": "Benutzername",
           "password": "Passwort"
         }
+      },
+      "reconfigure": {
+        "title": "Shelly neu konfigurieren",
+        "description": "Neue IP-Adresse oder neuer Hostname des Shelly. Das Gerät muss dasselbe sein wie zuvor. Ein leeres Passwortfeld behält das gespeicherte Passwort.",
+        "data": {
+          "host": "IP-Adresse oder Hostname",
+          "username": "Benutzername (optional)",
+          "password": "Passwort (leer lassen, um das gespeicherte zu behalten)"
+        }
       }
     },
     "error": {
       "cannot_connect": "Verbindung zum Shelly fehlgeschlagen",
       "invalid_auth": "Benutzername oder Passwort falsch",
       "emdata_unavailable": "Der Shelly bietet keine EMData-Daten. Läuft er im Monophase-Profil? Die Integration benötigt das Triphase-Profil.",
-      "unknown": "Unerwarteter Fehler (Details im Home-Assistant-Log)"
+      "unknown": "Unerwarteter Fehler (Details im Home-Assistant-Log)",
+      "wrong_device": "Das ist ein anderes Gerät als das eingerichtete (die MAC-Adresse stimmt nicht überein)"
     },
     "abort": {
       "already_configured": "Dieses Gerät ist bereits eingerichtet",
-      "reauth_successful": "Die Zugangsdaten wurden aktualisiert"
+      "reauth_successful": "Die Zugangsdaten wurden aktualisiert",
+      "reconfigure_successful": "Die Verbindungsdaten wurden aktualisiert"
     }
   },
   "options": {

@@ -58,6 +58,10 @@ class ShellyPhaseNettingCoordinator(DataUpdateCoordinator):
             # Initial backfill only: energy per hour until it has been written to the recorder.
             "history_pending": False,
             "hourly": {},
+            # Hour in which the initial backfill completed, and the start of the 5-minute slot
+            # before it completed: where the recorder's running sum is anchored.
+            "history_cursor_hour": None,
+            "history_anchor_ts": None,
         }
         self._history_task = None
 
@@ -136,6 +140,9 @@ class ShellyPhaseNettingCoordinator(DataUpdateCoordinator):
             self.state["cursor"] = cursor
             self.state["catch_up_pending"] = pending
             self.state["hourly"] = hourly
+            if history and not pending and self.state["history_cursor_hour"] is None:
+                self.state["history_cursor_hour"] = cursor // 3600 * 3600
+                self.state["history_anchor_ts"] = int(time.time()) // 300 * 300 - 300
             if cursor != original_cursor:
                 await self.store.async_save(self.state)
             self.update_interval = (
@@ -149,12 +156,19 @@ class ShellyPhaseNettingCoordinator(DataUpdateCoordinator):
             self.update_interval = self._poll_interval
             raise UpdateFailed(f"Shelly unreachable: {err}") from err
 
+    @property
+    def history_pending(self) -> bool:
+        """True until the initial statistics import has been handled."""
+        return bool(self.state["history_pending"])
+
     @callback
     def async_schedule_history_import(self) -> None:
         """Start the one-time statistics import as soon as the initial backfill is complete."""
         if (
             not self.state["history_pending"]
             or self.state["catch_up_pending"]
+            or self.state["history_cursor_hour"] is None
+            or self.state["history_anchor_ts"] is None
             or self._history_task is not None
         ):
             return
@@ -168,7 +182,8 @@ class ShellyPhaseNettingCoordinator(DataUpdateCoordinator):
                 self.hass,
                 self.config_entry,
                 dict(self.state["hourly"]),
-                int(self.state["cursor"]),
+                int(self.state["history_cursor_hour"]),
+                int(self.state["history_anchor_ts"]),
             )
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Importing the backfilled history failed; skipping it")
@@ -178,4 +193,8 @@ class ShellyPhaseNettingCoordinator(DataUpdateCoordinator):
         if finished:
             self.state["history_pending"] = False
             self.state["hourly"] = {}
+            self.state["history_cursor_hour"] = None
+            self.state["history_anchor_ts"] = None
             await self.store.async_save(self.state)
+            # The energy sensors were held back until now; let them publish their first value.
+            self.async_update_listeners()

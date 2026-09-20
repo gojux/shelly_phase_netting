@@ -7,7 +7,7 @@ This custom integration reads `EMData.GetData` from a Shelly Pro 3EM, nets every
 - Netted grid import (kWh)
 - Netted grid export (kWh)
 
-In addition there is a diagnostic sensor "Last processed record" (timestamp). Its `cursor` attribute holds the position from which the next poll continues reading.
+In addition there is a diagnostic sensor "Last processed record" (timestamp; it is listed under "Diagnostic" on the device page). Its `cursor` attribute holds the position from which the next poll continues reading.
 
 The cursor and both totals are persisted in Home Assistant after every successful data import. If Home Assistant is down for a while, the gap is filled from the Shelly's history afterwards. Nothing is ever written to the Shelly.
 
@@ -88,7 +88,7 @@ How the records are processed:
 - **A failed poll changes nothing.** If the Shelly cannot be reached, or the answer is incomplete, neither the totals nor the cursor are touched. The next successful poll reads the same records again, so nothing is lost and nothing is counted twice.
 - **First start:** the cursor is set to the chosen backfill point in time (rounded down to a full minute), and the records from then on are processed like any others. Large backlogs are read in stages of at most 20 pages per poll, with follow-up polls every 2 seconds.
 - **Gaps in the Shelly's history** (for example while the Shelly was off) are skipped: the cursor jumps to the next stored record.
-- **History for the Energy dashboard:** During the initial backfill the energy is also summed per hour. Once the backfill is complete, these hourly values are written to the recorder's long-term statistics of the two energy sensors, ending with the last full hour before the current one; Home Assistant compiles the rest from the live values, so the curve continues without a jump. The first hour only serves as the baseline. This happens once, on the initial setup only, and only if the recorder has no statistics for the sensors yet (otherwise existing values would be overwritten; a warning is logged). To get the history for an existing installation, delete the statistics of both sensors (Developer tools → Statistics), remove the integration and set it up again. The history graph of the sensor itself is not backfilled, and outages later on are booked when they are caught up (see above).
+- **History for the Energy dashboard:** During the initial backfill the energy is also summed per hour. Once the backfill is complete, these hourly values are written to the recorder's long-term statistics of the two energy sensors, ending with the last full hour before the current one; Home Assistant compiles the rest from the live values. So that its own running sum continues exactly where the imported one ends, one 5-minute statistics row is imported as the starting point for it; without it the sum would jump back by the imported total. The first hour only serves as the baseline. This happens once, on the initial setup only, and only if the recorder has no statistics for the sensors yet (otherwise existing values would be overwritten; a warning is logged). To get the history for an existing installation, remove the integration, delete the leftover statistics of both sensors (Developer tools → Statistics) and set the integration up again. The sensor's own state history only begins at the moment of setup; before that, the history panel shows the imported hourly values as steps. Outages later on are booked when they are caught up (see above).
 - **Output:** the sensors show the totals in kWh (Wh ÷ 1000, up to six decimals) and are of the type `total_increasing`, which is what the Energy dashboard expects.
 
 ## Behaviour and limitations
@@ -96,10 +96,11 @@ How the records are processed:
 - The Pro 3EM must run in the **triphase profile** (3 phases). The monophase profile has no `EMData` component (it uses `EM1Data` instead); setup reports a corresponding error in that case.
 - The counters start at the chosen backfill point in time, not at the historical meter reading of your grid operator.
 - Netting is done per stored 60-second interval. Short-term consumption and feed-in within the same minute can therefore cancel each other out.
-- The backfill runs in stages (at most 20 pages per poll, follow-up polls every 2 seconds) and does not block the setup. The two energy sensors stay `unavailable` until the backfill is complete, so the first value they report is the complete total and the Energy dashboard does not book the backfilled energy as consumption in the first hour. The `catch_up_pending` attribute of the diagnostic sensor shows whether catching up is still in progress.
+- The backfill runs in stages (at most 20 pages per poll, follow-up polls every 2 seconds) and does not block the setup. The two energy sensors stay `unavailable` until the backfill is complete and its history has been imported, so the first value they report is the complete total and the Energy dashboard does not book the backfilled energy as consumption in the first hour. The `catch_up_pending` attribute of the diagnostic sensor shows whether catching up is still in progress.
 - Data that has already dropped out of the Shelly's internal history cannot be recovered.
 - The polling interval (30–3600 seconds, default 60) can be changed in the integration options; the integration reloads automatically when you do.
 - If the Shelly rejects the credentials (for example after a password change), Home Assistant starts a re-authentication dialog.
+- If the Shelly gets a new IP address or hostname, change it under **Settings → Devices & services → Shelly Phase Netting → ⋮ → Reconfigure**. It must be the same device (checked by its MAC address); an empty password field keeps the stored password. The read position and totals are kept.
 - Back up your Home Assistant data before deleting or re-adding the integration: removing the config entry also deletes its stored cursor and totals (`.storage/shelly_phase_netting.<entry_id>`); a newly added entry starts at 0 again.
 
 ## Tests

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
-from homeassistant.const import UnitOfEnergy
+from homeassistant.const import EntityCategory, UnitOfEnergy
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -48,8 +48,14 @@ class EnergySensor(BaseSensor):
     def available(self) -> bool:
         # While the backlog is still being caught up (notably the initial backfill) the total is
         # incomplete. Staying unavailable makes the first valid value the statistics baseline, so
-        # the backfilled energy is not booked as consumption in the first hour.
-        return super().available and not self.coordinator.data["catch_up_pending"]
+        # the backfilled energy is not booked as consumption in the first hour. The sensors also
+        # wait for the statistics import: its anchor row must exist before the recorder sees the
+        # first valid state, otherwise a 5-minute run in between would start an unanchored sum.
+        return (
+            super().available
+            and not self.coordinator.data["catch_up_pending"]
+            and not self.coordinator.history_pending
+        )
 
     @property
     def native_value(self):
@@ -57,6 +63,7 @@ class EnergySensor(BaseSensor):
 
 
 class LastRecordSensor(BaseSensor):
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "last_record"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
 

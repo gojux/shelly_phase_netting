@@ -104,6 +104,34 @@ class ShellyPhaseNettingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders={"name": entry.title},
         )
 
+    async def async_step_reconfigure(self, user_input=None):
+        """Change the address or the credentials of an already configured Shelly."""
+        errors = {}
+        entry = self._get_reconfigure_entry()
+        if user_input is not None:
+            # An empty field keeps the stored value, so the password does not have to be re-entered.
+            username = user_input.get(CONF_USERNAME) or entry.data.get(CONF_USERNAME)
+            password = user_input.get(CONF_PASSWORD) or entry.data.get(CONF_PASSWORD)
+            info, error = await _async_probe(self.hass, user_input[CONF_HOST], username, password)
+            if error is None and str(info.get("mac", entry.unique_id)).lower() != entry.unique_id:
+                error = "wrong_device"
+            if error is None:
+                updates = {CONF_HOST: user_input[CONF_HOST]}
+                if username:
+                    updates[CONF_USERNAME] = username
+                if password:
+                    updates[CONF_PASSWORD] = password
+                return self.async_update_reload_and_abort(entry, data_updates=updates)
+            errors["base"] = error
+
+        current = user_input or entry.data
+        schema = vol.Schema({
+            vol.Required(CONF_HOST, default=current.get(CONF_HOST, "")): str,
+            vol.Optional(CONF_USERNAME, default=current.get(CONF_USERNAME) or "admin"): str,
+            vol.Optional(CONF_PASSWORD): str,
+        })
+        return self.async_show_form(step_id="reconfigure", data_schema=schema, errors=errors)
+
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):

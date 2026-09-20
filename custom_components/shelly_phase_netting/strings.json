@@ -19,17 +19,28 @@
           "username": "Username",
           "password": "Password"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure the Shelly",
+        "description": "New IP address or hostname of the Shelly. It must be the same device as before. An empty password field keeps the stored password.",
+        "data": {
+          "host": "IP address or hostname",
+          "username": "Username (optional)",
+          "password": "Password (leave empty to keep the stored one)"
+        }
       }
     },
     "error": {
       "cannot_connect": "Connection to the Shelly failed",
       "invalid_auth": "Invalid username or password",
       "emdata_unavailable": "The Shelly does not provide EMData. Is it running in the monophase profile? This integration needs the triphase profile.",
-      "unknown": "Unexpected error (see the Home Assistant log for details)"
+      "unknown": "Unexpected error (see the Home Assistant log for details)",
+      "wrong_device": "This is a different device than the configured one (the MAC address does not match)"
     },
     "abort": {
       "already_configured": "This device is already configured",
-      "reauth_successful": "The credentials have been updated"
+      "reauth_successful": "The credentials have been updated",
+      "reconfigure_successful": "The connection details have been updated"
     }
   },
   "options": {
