@@ -1,0 +1,9 @@
+{
+  "entity": {
+    "sensor": {
+      "net_import": {"default": "mdi:transmission-tower-export"},
+      "net_export": {"default": "mdi:transmission-tower-import"},
+      "last_record": {"default": "mdi:clock-check-outline"}
+    }
+  }
+}

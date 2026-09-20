@@ -210,3 +210,14 @@ async def test_a_single_busy_answer_does_not_make_the_sensors_unavailable(hass, 
     assert coordinator.last_update_success is True
     assert hass.states.get(entity_id).state != "unavailable"
     await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_home_assistant_loads_the_sensor_icons(hass, enable_custom_integrations):
+    from homeassistant.helpers.icon import async_get_icons
+
+    icons = await async_get_icons(hass, "entity", [DOMAIN])
+    sensors = icons[DOMAIN]["sensor"]
+    # Grid import: power flows out of the tower towards the house; export: into the tower.
+    assert sensors["net_import"]["default"] == "mdi:transmission-tower-export"
+    assert sensors["net_export"]["default"] == "mdi:transmission-tower-import"
+    assert sensors["last_record"]["default"] == "mdi:clock-check-outline"

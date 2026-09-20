@@ -22,3 +22,10 @@ def test_german_and_english_translations_have_the_same_keys():
 
 def test_strings_json_matches_english_translation():
     assert load("strings.json") == load("translations/en.json")
+
+
+def test_every_translated_sensor_has_an_icon():
+    icons = load("icons.json")["entity"]["sensor"]
+    names = load("translations/en.json")["entity"]["sensor"]
+    assert set(icons) == set(names)
+    assert all(icon["default"].startswith("mdi:") for icon in icons.values())
