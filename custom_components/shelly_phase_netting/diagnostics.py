@@ -50,6 +50,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
                 "export_wh": state["export_wh"],
                 "cursor": _iso(state["cursor"]),
                 "last_record": _iso(state["last_record_ts"]),
+                "clock_offset_seconds": state["clock_offset"],
                 "catch_up_pending": state["catch_up_pending"],
                 "history_pending": state["history_pending"],
                 "history_hours_collected": len(hourly),

@@ -90,4 +90,5 @@ class LastRecordSensor(BaseSensor):
             "missing_minutes": data.get("gap_minutes", 0),
             "last_gap_start": _iso(last_gap[0]) if last_gap else None,
             "last_gap_end": _iso(last_gap[1]) if last_gap else None,
+            "clock_offset_seconds": data.get("clock_offset"),
         }

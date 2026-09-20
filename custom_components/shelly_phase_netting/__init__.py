@@ -5,7 +5,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN, PLATFORMS, STORE_VERSION, gap_issue_id, store_key
+from .const import DOMAIN, PLATFORMS, STORE_VERSION, clock_issue_id, gap_issue_id, store_key
 from .coordinator import ShellyPhaseNettingCoordinator
 
 
@@ -41,3 +41,4 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Delete the persisted cursor and totals and the repair notice with the config entry."""
     await Store(hass, STORE_VERSION, store_key(entry.entry_id)).async_remove()
     ir.async_delete_issue(hass, DOMAIN, gap_issue_id(entry.entry_id))
+    ir.async_delete_issue(hass, DOMAIN, clock_issue_id(entry.entry_id))

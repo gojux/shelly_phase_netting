@@ -101,5 +101,9 @@ class ShellyApi:
     def get_device_info(self) -> dict:
         return self._get("/rpc/Shelly.GetDeviceInfo")
 
+    def get_unixtime(self) -> int | None:
+        """The Shelly's clock (Unix time), or None while it has no valid time."""
+        return self._get("/rpc/Sys.GetStatus").get("unixtime")
+
     def close(self) -> None:
         self._session.close()

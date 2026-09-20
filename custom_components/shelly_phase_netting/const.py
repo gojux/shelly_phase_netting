@@ -14,6 +14,10 @@ MAX_PAGES_PER_UPDATE = 20
 CATCH_UP_INTERVAL = 2
 # A gap of at least this many minutes in the Shelly's history raises a repair notice.
 GAP_ISSUE_MINUTES = 10
+# The Shelly's clock is compared with Home Assistant's at start and then this often (seconds).
+CLOCK_CHECK_INTERVAL = 3600
+# Beyond this difference (seconds) the records would be assigned to the wrong hours.
+CLOCK_TOLERANCE = 120
 
 
 def store_key(entry_id: str) -> str:
@@ -22,3 +26,7 @@ def store_key(entry_id: str) -> str:
 
 def gap_issue_id(entry_id: str) -> str:
     return f"data_gap_{entry_id}"
+
+
+def clock_issue_id(entry_id: str) -> str:
+    return f"clock_{entry_id}"

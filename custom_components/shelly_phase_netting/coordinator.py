@@ -16,6 +16,8 @@ from homeassistant.util import dt as dt_util
 from .api import ShellyApi, ShellyApiError, ShellyAuthError
 from .const import (
     CATCH_UP_INTERVAL,
+    CLOCK_CHECK_INTERVAL,
+    CLOCK_TOLERANCE,
     CONF_BACKFILL_HOURS,
     CONF_SCAN_INTERVAL,
     DEFAULT_BACKFILL_HOURS,
@@ -24,6 +26,7 @@ from .const import (
     GAP_ISSUE_MINUTES,
     MAX_PAGES_PER_UPDATE,
     STORE_VERSION,
+    clock_issue_id,
     gap_issue_id,
     store_key,
 )
@@ -74,8 +77,11 @@ class ShellyPhaseNettingCoordinator(DataUpdateCoordinator):
             "gap_minutes": 0,
             "gap_count": 0,
             "last_gap": None,   # [start, end] as timestamps
+            # The Shelly's clock minus Home Assistant's in seconds (None: unknown or not set).
+            "clock_offset": None,
         }
         self._history_task = None
+        self._next_clock_check = 0.0
 
     async def async_initialize(self) -> None:
         saved = await self.store.async_load()
@@ -167,6 +173,7 @@ class ShellyPhaseNettingCoordinator(DataUpdateCoordinator):
             if cursor != original_cursor:
                 await self.store.async_save(self.state)
             self._report_gaps(gaps)
+            await self._async_check_clock()
             self.update_interval = (
                 timedelta(seconds=CATCH_UP_INTERVAL) if pending else self._poll_interval
             )
@@ -177,6 +184,41 @@ class ShellyPhaseNettingCoordinator(DataUpdateCoordinator):
         except ShellyApiError as err:
             self.update_interval = self._poll_interval
             raise UpdateFailed(f"Shelly request failed: {err}") from err
+
+    async def _async_check_clock(self) -> None:
+        """Compare the Shelly's clock with ours now and then; a wrong clock misfiles the energy."""
+        if self.hass.loop.time() < self._next_clock_check:
+            return
+        self._next_clock_check = self.hass.loop.time() + CLOCK_CHECK_INTERVAL
+        try:
+            unixtime = await self.hass.async_add_executor_job(self.api.get_unixtime)
+        except ShellyApiError as err:
+            _LOGGER.debug("Could not read the Shelly's clock: %s", err)
+            self._next_clock_check = self.hass.loop.time() + 300   # try again soon
+            return
+        issue_id = clock_issue_id(self.config_entry.entry_id)
+        if unixtime is None:
+            self.state["clock_offset"] = None
+            translation_key, placeholders = "clock_not_set", {}
+        else:
+            offset = int(unixtime - dt_util.utcnow().timestamp())
+            self.state["clock_offset"] = offset
+            if abs(offset) <= CLOCK_TOLERANCE:
+                ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+                return
+            translation_key = "clock_offset"
+            placeholders = {"minutes": str(round(abs(offset) / 60)), "seconds": str(offset)}
+        _LOGGER.warning("The Shelly's clock is wrong (%s); its records are filed under the wrong time",
+                        "not set" if unixtime is None else f"{offset:+d} s")
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=translation_key,
+            translation_placeholders={"name": self.config_entry.title, **placeholders},
+        )
 
     def _report_gaps(self, gaps: list[tuple[int, int]]) -> None:
         """Log new gaps and keep one repair notice about the long ones."""

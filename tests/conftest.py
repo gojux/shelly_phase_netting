@@ -1,4 +1,4 @@
-import hashlib, json, secrets, threading
+import hashlib, json, secrets, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 import pytest
@@ -11,6 +11,8 @@ class FakeShelly:
     def __init__(self, password="secret", emdata=True, mac="AABBCCDDEEFF"):
         self.password, self.emdata, self.mac = password, emdata, mac
         self.busy = 0   # answer this many further requests with 429 Too Many Requests
+        self.clock_offset = 0   # seconds the device's clock is off; None: it has no valid time
+        self.clock_available = True
         self.requests = []   # (path, authed)
         self.nonce = secrets.token_hex(8)
         # records: ts -> (a_act, a_ret, b_act, b_ret, c_act, c_ret)
@@ -53,6 +55,10 @@ def make_handler(fs):
                     "fw_id": "20260710-101227/2.0.0-g87fbfa4", "ver": "2.0.0", "app": "Pro3EM",
                     "auth_en": bool(fs.password),
                 })
+            if u.path == "/rpc/Sys.GetStatus":
+                if not fs.clock_available: return self._send(404, b"No handler")
+                unixtime = None if fs.clock_offset is None else int(time.time()) + fs.clock_offset
+                return self._json({"unixtime": unixtime})
             if u.path == "/rpc/EMData.GetData":
                 if not fs.emdata: return self._send(404, b"No handler for EMData.GetData")
                 q = parse_qs(u.query); ts = int(q["ts"][0])

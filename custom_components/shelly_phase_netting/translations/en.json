@@ -70,6 +70,14 @@
     "data_gap": {
       "title": "Gap in the Shelly's history",
       "description": "The stored history of {name} has a gap: no data for {minutes} minutes, from {start} to {end} (in total {total} minutes in {count} gap(s)). The energy of that time is missing from the totals. The Shelly was probably switched off or without power, or its history was overwritten while Home Assistant was not reading it. The missing data cannot be recovered; you can ignore this notice."
+    },
+    "clock_offset": {
+      "title": "The Shelly's clock is wrong",
+      "description": "The clock of {name} differs from Home Assistant's by about {minutes} minutes ({seconds} s). The Shelly stamps its records with its own time, so the energy would be assigned to the wrong hours. Set the Shelly's time to be set automatically from a time server (NTP) in its web interface, and check that it can reach one."
+    },
+    "clock_not_set": {
+      "title": "The Shelly does not know the time",
+      "description": "{name} reports no valid time, probably because it cannot reach a time server. Its records cannot be assigned to the right hours. Make sure the Shelly can reach an internet time server (NTP) or set its time in its web interface."
     }
   }
 }
