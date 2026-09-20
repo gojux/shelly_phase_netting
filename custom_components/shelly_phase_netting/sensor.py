@@ -19,6 +19,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
     ])
 
 
+def _iso(timestamp: int) -> str:
+    return datetime.fromtimestamp(timestamp, timezone.utc).isoformat()
+
+
 class BaseSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
 
@@ -77,7 +81,13 @@ class LastRecordSensor(BaseSensor):
 
     @property
     def extra_state_attributes(self):
+        data = self.coordinator.data
+        last_gap = data.get("last_gap")
         return {
-            "cursor": self.coordinator.data.get("cursor"),
-            "catch_up_pending": self.coordinator.data.get("catch_up_pending", False),
+            "cursor": data.get("cursor"),
+            "catch_up_pending": data.get("catch_up_pending", False),
+            "gaps": data.get("gap_count", 0),
+            "missing_minutes": data.get("gap_minutes", 0),
+            "last_gap_start": _iso(last_gap[0]) if last_gap else None,
+            "last_gap_end": _iso(last_gap[1]) if last_gap else None,
         }

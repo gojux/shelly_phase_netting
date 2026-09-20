@@ -65,5 +65,11 @@
         "name": "Last processed record"
       }
     }
+  },
+  "issues": {
+    "data_gap": {
+      "title": "Gap in the Shelly's history",
+      "description": "The stored history of {name} has a gap: no data for {minutes} minutes, from {start} to {end} (in total {total} minutes in {count} gap(s)). The energy of that time is missing from the totals. The Shelly was probably switched off or without power, or its history was overwritten while Home Assistant was not reading it. The missing data cannot be recovered; you can ignore this notice."
+    }
   }
 }

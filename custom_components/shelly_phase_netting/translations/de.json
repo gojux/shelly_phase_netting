@@ -65,5 +65,11 @@
         "name": "Letzter verarbeiteter Datensatz"
       }
     }
+  },
+  "issues": {
+    "data_gap": {
+      "title": "Lücke in der Historie des Shelly",
+      "description": "In der gespeicherten Historie von {name} fehlen Daten: {minutes} Minuten von {start} bis {end} (insgesamt {total} Minuten in {count} Lücke(n)). Die Energie dieser Zeit fehlt in den Summen. Der Shelly war vermutlich ausgeschaltet oder stromlos, oder seine Historie wurde überschrieben, während Home Assistant nicht gelesen hat. Die fehlenden Daten lassen sich nicht wiederherstellen; du kannst diesen Hinweis ignorieren."
+    }
   }
 }

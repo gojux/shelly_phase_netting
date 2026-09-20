@@ -8,8 +8,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .api import ShellyApi, ShellyApiError, ShellyAuthError
 from .const import (
@@ -19,8 +21,10 @@ from .const import (
     DEFAULT_BACKFILL_HOURS,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    GAP_ISSUE_MINUTES,
     MAX_PAGES_PER_UPDATE,
     STORE_VERSION,
+    gap_issue_id,
     store_key,
 )
 from .history import async_import_history
@@ -31,6 +35,10 @@ ENERGY_KEYS = (
     "b_total_act_energy", "b_total_act_ret_energy",
     "c_total_act_energy", "c_total_act_ret_energy",
 )
+
+
+def _local_time(timestamp: int) -> str:
+    return dt_util.as_local(dt_util.utc_from_timestamp(timestamp)).strftime("%Y-%m-%d %H:%M")
 
 
 class ShellyPhaseNettingCoordinator(DataUpdateCoordinator):
@@ -62,6 +70,10 @@ class ShellyPhaseNettingCoordinator(DataUpdateCoordinator):
             # before it completed: where the recorder's running sum is anchored.
             "history_cursor_hour": None,
             "history_anchor_ts": None,
+            # Gaps in the Shelly's history: minutes without data that were skipped.
+            "gap_minutes": 0,
+            "gap_count": 0,
+            "last_gap": None,   # [start, end] as timestamps
         }
         self._history_task = None
 
@@ -84,6 +96,7 @@ class ShellyPhaseNettingCoordinator(DataUpdateCoordinator):
         last_record_ts = self.state["last_record_ts"]
         history = self.state["history_pending"]
         hourly = {hour: list(values) for hour, values in self.state["hourly"].items()}
+        gaps: list[tuple[int, int]] = []
         pages = 0
         pending = False
         try:
@@ -110,6 +123,10 @@ class ShellyPhaseNettingCoordinator(DataUpdateCoordinator):
                         record_ts = ts + offset * period
                         if record_ts < cursor:
                             continue
+                        if last_record_ts is not None and record_ts > last_record_ts + period:
+                            # Minutes the Shelly has no record for (it was off, or its history
+                            # was overwritten): their energy cannot be recovered.
+                            gaps.append((last_record_ts + period, record_ts))
                         net_wh = sum(
                             float(row[indices[i]]) - float(row[indices[i + 1]])
                             for i in (0, 2, 4)
@@ -140,11 +157,16 @@ class ShellyPhaseNettingCoordinator(DataUpdateCoordinator):
             self.state["cursor"] = cursor
             self.state["catch_up_pending"] = pending
             self.state["hourly"] = hourly
+            for gap_start, gap_end in gaps:
+                self.state["gap_minutes"] += (gap_end - gap_start) // 60
+                self.state["gap_count"] += 1
+                self.state["last_gap"] = [gap_start, gap_end]
             if history and not pending and self.state["history_cursor_hour"] is None:
                 self.state["history_cursor_hour"] = cursor // 3600 * 3600
                 self.state["history_anchor_ts"] = int(time.time()) // 300 * 300 - 300
             if cursor != original_cursor:
                 await self.store.async_save(self.state)
+            self._report_gaps(gaps)
             self.update_interval = (
                 timedelta(seconds=CATCH_UP_INTERVAL) if pending else self._poll_interval
             )
@@ -155,6 +177,40 @@ class ShellyPhaseNettingCoordinator(DataUpdateCoordinator):
         except ShellyApiError as err:
             self.update_interval = self._poll_interval
             raise UpdateFailed(f"Shelly request failed: {err}") from err
+
+    def _report_gaps(self, gaps: list[tuple[int, int]]) -> None:
+        """Log new gaps and keep one repair notice about the long ones."""
+        for gap_start, gap_end in gaps:
+            minutes = (gap_end - gap_start) // 60
+            _LOGGER.log(
+                logging.WARNING if minutes >= GAP_ISSUE_MINUTES else logging.INFO,
+                "The Shelly has no data for %d minutes (from %s to %s); their energy is missing "
+                "from the totals",
+                minutes,
+                _local_time(gap_start),
+                _local_time(gap_end),
+            )
+        long_gaps = [gap for gap in gaps if (gap[1] - gap[0]) // 60 >= GAP_ISSUE_MINUTES]
+        if not long_gaps:
+            return
+        gap_start, gap_end = long_gaps[-1]
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            gap_issue_id(self.config_entry.entry_id),
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="data_gap",
+            translation_placeholders={
+                "name": self.config_entry.title,
+                "minutes": str((gap_end - gap_start) // 60),
+                "start": _local_time(gap_start),
+                "end": _local_time(gap_end),
+                "total": str(self.state["gap_minutes"]),
+                "count": str(self.state["gap_count"]),
+            },
+        )
 
     @property
     def history_pending(self) -> bool:
