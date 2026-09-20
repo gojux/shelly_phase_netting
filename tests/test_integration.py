@@ -185,3 +185,28 @@ async def test_last_record_sensor_is_a_diagnostic_entity(hass, fake_shelly):
     assert by_unique_id["aabbccddeeff_import"].entity_category is None
     assert by_unique_id["aabbccddeeff_export"].entity_category is None
     await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_a_single_busy_answer_does_not_make_the_sensors_unavailable(hass, fake_shelly):
+    fill(fake_shelly, ((int(time.time()) - 3600) // 60) * 60, 5)
+    entry = await setup_entry(hass, fake_shelly)
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    entity_id = "sensor.test_netted_grid_import"
+    assert hass.states.get(entity_id).state != "unavailable"
+
+    fake_shelly.busy = 1   # one 429, the repeated request is answered
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.last_update_success is True
+    assert hass.states.get(entity_id).state != "unavailable"
+
+    fake_shelly.busy = 3   # stays busy for all attempts: the poll fails, the next one recovers
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.last_update_success is False
+    assert hass.states.get(entity_id).state == "unavailable"
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.last_update_success is True
+    assert hass.states.get(entity_id).state != "unavailable"
+    await hass.config_entries.async_unload(entry.entry_id)

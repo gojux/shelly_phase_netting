@@ -154,7 +154,7 @@ class ShellyPhaseNettingCoordinator(DataUpdateCoordinator):
             raise ConfigEntryAuthFailed(f"Shelly rejected the credentials: {err}") from err
         except ShellyApiError as err:
             self.update_interval = self._poll_interval
-            raise UpdateFailed(f"Shelly unreachable: {err}") from err
+            raise UpdateFailed(f"Shelly request failed: {err}") from err
 
     @property
     def history_pending(self) -> bool:

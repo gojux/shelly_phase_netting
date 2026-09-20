@@ -10,6 +10,7 @@ def h(s): return hashlib.sha256(s.encode()).hexdigest()
 class FakeShelly:
     def __init__(self, password="secret", emdata=True, mac="AABBCCDDEEFF"):
         self.password, self.emdata, self.mac = password, emdata, mac
+        self.busy = 0   # answer this many further requests with 429 Too Many Requests
         self.requests = []   # (path, authed)
         self.nonce = secrets.token_hex(8)
         # records: ts -> (a_act, a_ret, b_act, b_ret, c_act, c_ret)
@@ -24,6 +25,7 @@ class FakeShelly:
             k, _, v = part.strip().partition("=")
             f[k] = v.strip('"')
         if f.get("algorithm") != "SHA-256" or f.get("username") != "admin": return False
+        if f.get("nonce") != self.nonce: return False   # unknown or expired nonce
         ha1 = h(f"admin:shellypro3em-test:{self.password}")
         ha2 = h(f"{method}:{f['uri']}")
         if f["uri"] != uri: return False
@@ -42,6 +44,9 @@ def make_handler(fs):
             if not authed:
                 self._send(401, b"", {"WWW-Authenticate": f'Digest qop="auth", realm="shellypro3em-test", nonce="{fs.nonce}", algorithm=SHA-256'})
                 return
+            if fs.busy > 0:
+                fs.busy -= 1
+                return self._send(429, b"Too many requests", {"Retry-After": "0"})
             if u.path == "/rpc/Shelly.GetDeviceInfo":
                 return self._json({"id": "shellypro3em-test", "mac": fs.mac})
             if u.path == "/rpc/EMData.GetData":
