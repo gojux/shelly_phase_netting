@@ -48,7 +48,11 @@ def make_handler(fs):
                 fs.busy -= 1
                 return self._send(429, b"Too many requests", {"Retry-After": "0"})
             if u.path == "/rpc/Shelly.GetDeviceInfo":
-                return self._json({"id": "shellypro3em-test", "mac": fs.mac})
+                return self._json({
+                    "id": "shellypro3em-test", "mac": fs.mac, "model": "SPEM-003CEBEU", "gen": 2,
+                    "fw_id": "20260710-101227/2.0.0-g87fbfa4", "ver": "2.0.0", "app": "Pro3EM",
+                    "auth_en": bool(fs.password),
+                })
             if u.path == "/rpc/EMData.GetData":
                 if not fs.emdata: return self._send(404, b"No handler for EMData.GetData")
                 q = parse_qs(u.query); ts = int(q["ts"][0])

@@ -104,6 +104,10 @@ How the records are processed:
 - If the Shelly gets a new IP address or hostname, change it under **Settings → Devices & services → Shelly Phase Netting → ⋮ → Reconfigure**. It must be the same device (checked by its MAC address); an empty password field keeps the stored password. The read position and totals are kept.
 - Back up your Home Assistant data before deleting or re-adding the integration: removing the config entry also deletes its stored cursor and totals (`.storage/shelly_phase_netting.<entry_id>`); a newly added entry starts at 0 again.
 
+## Diagnostics
+
+For bug reports, use **Settings → Devices & services → Shelly Phase Netting → ⋮ → Download diagnostics**. The file contains the state (totals, read position, gaps), the last error and the Shelly's model and firmware version. The address, the credentials and device identifiers are redacted. For more detail, enable debug logging on the same page.
+
 ## Tests
 
 The tests run in Docker against different Python and Home Assistant versions (no local Python setup needed):

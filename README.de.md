@@ -104,6 +104,10 @@ So werden die Datensätze verarbeitet:
 - Bekommt der Shelly eine neue IP-Adresse oder einen neuen Hostnamen, lässt sie sich unter **Einstellungen → Geräte & Dienste → Shelly Phase Netting → ⋮ → Neu konfigurieren** ändern. Es muss dasselbe Gerät sein (Prüfung über die MAC-Adresse); ein leeres Passwortfeld behält das gespeicherte Passwort. Leseposition und Summen bleiben erhalten.
 - Vor einem Löschen/Neueinrichten der Integration die HA-Daten sichern: Das Entfernen des Config-Eintrags löscht auch den zugehörigen Cursor-/Summenspeicher (`.storage/shelly_phase_netting.<entry_id>`); ein neu eingerichteter Eintrag beginnt wieder bei 0.
 
+## Diagnose
+
+Für Fehlermeldungen: **Einstellungen → Geräte & Dienste → Shelly Phase Netting → ⋮ → Diagnose herunterladen**. Die Datei enthält den Zustand (Summen, Leseposition, Lücken), den letzten Fehler sowie Modell und Firmware-Version des Shelly. Adresse, Zugangsdaten und Gerätekennungen sind geschwärzt. Für mehr Details lässt sich auf derselben Seite das Debug-Logging einschalten.
+
 ## Tests
 
 Die Tests laufen in Docker gegen verschiedene Python- und Home-Assistant-Versionen (keine lokale Python-Einrichtung nötig):
