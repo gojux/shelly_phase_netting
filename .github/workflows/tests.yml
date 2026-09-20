@@ -1,0 +1,19 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    # Pre-release Home Assistant versions may break independently of this repository.
+    continue-on-error: ${{ matrix.service == 'tests-beta' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [tests, tests-min, tests-beta]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose run --rm --build ${{ matrix.service }}

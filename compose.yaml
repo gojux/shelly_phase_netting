@@ -1,0 +1,45 @@
+# Runs the test suite against different Python / Home Assistant versions.
+#
+#   docker compose run --rm tests          latest Python + latest Home Assistant
+#   docker compose run --rm tests-min      oldest supported Home Assistant (see hacs.json)
+#   docker compose run --rm tests-beta     latest Home Assistant pre-release
+#
+# Any combination: PYTHON_VERSION=3.14 HA_VERSION=2026.3.0 docker compose run --rm tests
+# Extra pytest arguments can be appended: docker compose run --rm tests -k reauth -x
+
+x-test-service: &test-service
+  volumes:
+    - .:/workspace:ro
+  working_dir: /workspace
+
+services:
+  tests:
+    <<: *test-service
+    image: shelly-phase-netting-tests:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION:-3.14}
+        HA_VERSION: ${HA_VERSION:-}
+        PIP_PRE: ${PIP_PRE:-}
+
+  tests-min:
+    <<: *test-service
+    image: shelly-phase-netting-tests:min
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PYTHON_VERSION: ${MIN_PYTHON_VERSION:-3.13}
+        HA_VERSION: ${MIN_HA_VERSION:-2026.2.0}
+
+  tests-beta:
+    <<: *test-service
+    image: shelly-phase-netting-tests:beta
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION:-3.14}
+        PIP_PRE: "1"

@@ -1,0 +1,58 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Shelly Phasensaldierung einrichten",
+        "description": "Die Rohdaten werden lokal vom Shelly gelesen. Der Rückimport bestimmt, ab wann die neuen Zähler beginnen. Der Shelly muss im Triphase-Profil (3 Phasen) laufen.",
+        "data": {
+          "host": "IP-Adresse oder Hostname",
+          "name": "Name",
+          "username": "Benutzername (optional)",
+          "password": "Passwort (optional)",
+          "backfill_hours": "Rückimport in Stunden (0–1080)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Zugangsdaten erneuern",
+        "description": "Der Shelly „{name}“ hat die gespeicherten Zugangsdaten abgelehnt. Bitte neu eingeben.",
+        "data": {
+          "username": "Benutzername",
+          "password": "Passwort"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zum Shelly fehlgeschlagen",
+      "invalid_auth": "Benutzername oder Passwort falsch",
+      "emdata_unavailable": "Der Shelly bietet keine EMData-Daten. Läuft er im Monophase-Profil? Die Integration benötigt das Triphase-Profil.",
+      "unknown": "Unerwarteter Fehler (Details im Home-Assistant-Log)"
+    },
+    "abort": {
+      "already_configured": "Dieses Gerät ist bereits eingerichtet",
+      "reauth_successful": "Die Zugangsdaten wurden aktualisiert"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Optionen",
+        "data": {
+          "scan_interval": "Abrufintervall in Sekunden"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "net_import": {
+        "name": "Netzbezug saldiert"
+      },
+      "net_export": {
+        "name": "Netzeinspeisung saldiert"
+      },
+      "last_record": {
+        "name": "Letzter verarbeiteter Datensatz"
+      }
+    }
+  }
+}

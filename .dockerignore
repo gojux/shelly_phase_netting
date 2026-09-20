@@ -1,0 +1,3 @@
+*
+!requirements_test.txt
+!docker/run_tests.sh

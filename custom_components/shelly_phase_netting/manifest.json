@@ -1,0 +1,19 @@
+{
+  "domain": "shelly_phase_netting",
+  "name": "Shelly Phase Netting",
+  "after_dependencies": [
+    "recorder"
+  ],
+  "codeowners": [
+    "@gojux"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/gojux/shelly_phase_netting",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/gojux/shelly_phase_netting/issues",
+  "requirements": [
+    "requests>=2.31.0"
+  ],
+  "version": "1.0.0"
+}

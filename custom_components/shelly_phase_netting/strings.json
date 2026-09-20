@@ -1,0 +1,58 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Shelly phase netting",
+        "description": "Raw data is read locally from the Shelly. The backfill determines when the new counters start. The Shelly must run in the triphase profile (3 phases).",
+        "data": {
+          "host": "IP address or hostname",
+          "name": "Name",
+          "username": "Username (optional)",
+          "password": "Password (optional)",
+          "backfill_hours": "Backfill in hours (0–1080)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Renew credentials",
+        "description": "The Shelly \"{name}\" rejected the stored credentials. Please enter them again.",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Connection to the Shelly failed",
+      "invalid_auth": "Invalid username or password",
+      "emdata_unavailable": "The Shelly does not provide EMData. Is it running in the monophase profile? This integration needs the triphase profile.",
+      "unknown": "Unexpected error (see the Home Assistant log for details)"
+    },
+    "abort": {
+      "already_configured": "This device is already configured",
+      "reauth_successful": "The credentials have been updated"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options",
+        "data": {
+          "scan_interval": "Polling interval in seconds"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "net_import": {
+        "name": "Netted grid import"
+      },
+      "net_export": {
+        "name": "Netted grid export"
+      },
+      "last_record": {
+        "name": "Last processed record"
+      }
+    }
+  }
+}
