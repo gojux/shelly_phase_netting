@@ -91,6 +91,20 @@ How the records are processed:
 - **History for the Energy dashboard:** During the initial backfill the energy is also summed per hour. Once the backfill is complete, these hourly values are written to the recorder's long-term statistics of the two energy sensors, ending with the last full hour before the current one; Home Assistant compiles the rest from the live values. So that its own running sum continues exactly where the imported one ends, one 5-minute statistics row is imported as the starting point for it; without it the sum would jump back by the imported total. The first hour only serves as the baseline. This happens once, on the initial setup only, and only if the recorder has no statistics for the sensors yet (otherwise existing values would be overwritten; a warning is logged). To get the history for an existing installation, remove the integration, delete the leftover statistics of both sensors (Developer tools → Statistics) and set the integration up again. The sensor's own state history only begins at the moment of setup; before that, the history panel shows the imported hourly values as steps. Outages later on are booked when they are caught up (see above).
 - **Output:** the sensors show the totals in kWh (Wh ÷ 1000, up to six decimals) and are of the type `total_increasing`, which is what the Energy dashboard expects.
 
+## After an outage
+
+If Home Assistant, the network or the connection to the Shelly was down for a while, nothing is lost as long as the Shelly kept recording:
+
+1. The read position (cursor) and both totals are stored after every poll that made progress. A restart of Home Assistant therefore continues exactly where it stopped.
+2. As soon as the Shelly answers again, the integration reads all records from the cursor on. A short outage is made up for in the first poll; a longer one is worked off in stages (at most 20 pages per poll, follow-up polls every 2 seconds).
+3. While such a backlog is being caught up, the two energy sensors are `unavailable` (the attribute `catch_up_pending` of the diagnostic sensor shows it). Afterwards they show the complete totals. Every record is counted exactly once, even if a poll fails halfway, because the cursor only moves after a successful read.
+4. The energy of the outage appears in the totals at the moment it is caught up. The Energy dashboard books it in that hour and not in the hours in which it was actually used, because Home Assistant cannot backdate values.
+
+Limits:
+
+- The Shelly keeps about 60 days of one-minute records. If the outage lasted longer, or the Shelly itself was switched off or without power, the missing minutes cannot be recovered. They are counted as a gap and reported (see above: attributes of the diagnostic sensor, and a notice under **Settings → System → Repairs** from 10 minutes on).
+- A single failed poll (Shelly unreachable, or HTTP 429) only makes the sensors `unavailable` until the next successful one; no data is lost.
+
 ## Behaviour and limitations
 
 - The Pro 3EM must run in the **triphase profile** (3 phases). The monophase profile has no `EMData` component (it uses `EM1Data` instead); setup reports a corresponding error in that case.

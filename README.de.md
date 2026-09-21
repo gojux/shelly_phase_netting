@@ -91,6 +91,20 @@ So werden die Datensätze verarbeitet:
 - **Historie für das Energie-Dashboard:** Beim ersten Rückimport wird die Energie zusätzlich pro Stunde aufsummiert. Ist der Rückimport abgeschlossen, werden diese Stundenwerte in die Langzeitstatistik der beiden Energie-Sensoren des Recorders geschrieben, bis zur letzten vollen Stunde vor der aktuellen; den Rest berechnet Home Assistant aus den Live-Werten. Damit seine eigene laufende Summe genau dort fortsetzt, wo die importierte endet, wird eine 5-Minuten-Statistikzeile als Startpunkt dafür importiert; ohne sie würde die Summe um den importierten Gesamtwert zurückspringen. Die erste Stunde dient nur als Ausgangsbasis. Das geschieht einmalig, nur bei der Ersteinrichtung und nur, wenn der Recorder für die Sensoren noch keine Statistik hat (sonst würden vorhandene Werte überschrieben; es wird eine Warnung protokolliert). Für die Historie einer bestehenden Installation die Integration entfernen, die übrig gebliebenen Statistiken beider Sensoren löschen (Entwicklerwerkzeuge → Statistiken) und die Integration neu einrichten. Die eigene Zustandshistorie des Sensors beginnt erst zum Zeitpunkt der Einrichtung; davor zeigt das Verlaufs-Panel die importierten Stundenwerte als Stufen. Spätere Ausfälle werden beim Nachholen gebucht (siehe oben).
 - **Ausgabe:** Die Sensoren zeigen die Summen in kWh (Wh ÷ 1000, bis zu sechs Nachkommastellen) und haben den Typ `total_increasing`, den das Energie-Dashboard erwartet.
 
+## Nach einem Ausfall
+
+War Home Assistant, das Netzwerk oder die Verbindung zum Shelly eine Zeit lang weg, geht nichts verloren, solange der Shelly weiter aufgezeichnet hat:
+
+1. Leseposition (Cursor) und beide Summen werden nach jedem Abruf mit Fortschritt gespeichert. Ein Neustart von Home Assistant macht daher genau dort weiter, wo er aufgehört hat.
+2. Sobald der Shelly wieder antwortet, liest die Integration alle Datensätze ab dem Cursor. Ein kurzer Ausfall ist im ersten Abruf nachgeholt; ein längerer wird in Etappen abgearbeitet (höchstens 20 Seiten pro Abruf, Folgeabrufe alle 2 Sekunden).
+3. Solange ein solcher Rückstand nachgeholt wird, sind die beiden Energie-Sensoren `unavailable` (das Attribut `catch_up_pending` des Diagnose-Sensors zeigt es an). Danach zeigen sie die vollständigen Summen. Jeder Datensatz wird genau einmal gezählt, auch wenn ein Abruf mittendrin scheitert, weil der Cursor erst nach einem erfolgreichen Lesen weiterrückt.
+4. Die Energie des Ausfalls erscheint in den Summen in dem Moment, in dem sie nachgeholt wird. Das Energie-Dashboard bucht sie in dieser Stunde und nicht in den Stunden, in denen sie tatsächlich verbraucht wurde, weil Home Assistant Werte nicht rückdatieren kann.
+
+Grenzen:
+
+- Der Shelly speichert etwa 60 Tage Minutendatensätze. Dauerte der Ausfall länger, oder war der Shelly selbst ausgeschaltet oder stromlos, lassen sich die fehlenden Minuten nicht wiederherstellen. Sie werden als Lücke gezählt und gemeldet (siehe oben: Attribute des Diagnose-Sensors und ab 10 Minuten ein Hinweis unter **Einstellungen → System → Reparaturen**).
+- Ein einzelner fehlgeschlagener Abruf (Shelly nicht erreichbar oder HTTP 429) macht die Sensoren nur bis zum nächsten erfolgreichen `unavailable`; Daten gehen nicht verloren.
+
 ## Verhalten und Grenzen
 
 - Der Pro 3EM muss im **Triphase-Profil** (3 Phasen) laufen. Im Monophase-Profil gibt es `EMData` nicht (dort heißt die Komponente `EM1Data`); die Einrichtung meldet dann einen entsprechenden Fehler.
