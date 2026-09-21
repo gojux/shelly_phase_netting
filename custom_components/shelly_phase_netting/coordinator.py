@@ -5,7 +5,7 @@ import logging
 import time
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_SCAN_INTERVAL, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import issue_registry as ir
@@ -19,7 +19,6 @@ from .const import (
     CLOCK_CHECK_INTERVAL,
     CLOCK_TOLERANCE,
     CONF_BACKFILL_HOURS,
-    CONF_SCAN_INTERVAL,
     DEFAULT_BACKFILL_HOURS,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,

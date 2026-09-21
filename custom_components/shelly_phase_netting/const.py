@@ -1,8 +1,9 @@
+from homeassistant.const import Platform
+
 DOMAIN = "shelly_phase_netting"
-PLATFORMS = ["sensor"]
+PLATFORMS = [Platform.SENSOR]
 DEFAULT_NAME = "Shelly Phase Netting"
 CONF_BACKFILL_HOURS = "backfill_hours"
-CONF_SCAN_INTERVAL = "scan_interval"
 DEFAULT_SCAN_INTERVAL = 60
 DEFAULT_BACKFILL_HOURS = 24
 MAX_BACKFILL_HOURS = 45 * 24

@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import logging
 
-from homeassistant.components.recorder import get_instance
+from homeassistant.components.recorder import DOMAIN as RECORDER_DOMAIN, get_instance
 from homeassistant.components.recorder.db_schema import StatisticsShortTerm
 from homeassistant.components.recorder.models import (
     StatisticData,
@@ -16,7 +16,7 @@ from homeassistant.components.recorder.statistics import (
     get_last_statistics,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfEnergy
+from homeassistant.const import Platform, UnitOfEnergy
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util.unit_conversion import EnergyConverter
@@ -73,7 +73,7 @@ def async_import_series(
         mean_type=StatisticMeanType.NONE,
         has_sum=True,
         name=None,
-        source="recorder",
+        source=RECORDER_DOMAIN,
         statistic_id=entity_id,
         unit_class=EnergyConverter.UNIT_CLASS,
         unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -101,14 +101,14 @@ async def async_import_history(
     Returns True when finished (imported or deliberately skipped) and False when it has to be
     retried later because the sensors are not registered yet.
     """
-    if "recorder" not in hass.config.components:
+    if RECORDER_DOMAIN not in hass.config.components:
         _LOGGER.debug("Recorder is not loaded, skipping the history import")
         return True
 
     registry = er.async_get(hass)
     entity_ids: dict[str, str] = {}
     for kind in SENSORS:
-        entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.unique_id}_{kind}")
+        entity_id = registry.async_get_entity_id(Platform.SENSOR, DOMAIN, f"{entry.unique_id}_{kind}")
         if entity_id is None:
             return False
         entity_ids[kind] = entity_id

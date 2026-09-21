@@ -6,13 +6,24 @@ import time
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_NAME,
+    CONF_PASSWORD,
+    CONF_SCAN_INTERVAL,
+    CONF_USERNAME,
+)
 from homeassistant.core import callback
 
-from .api import ShellyApi, ShellyApiError, ShellyAuthError, ShellyNotSupportedError
+from .api import (
+    SHELLY_USERNAME,
+    ShellyApi,
+    ShellyApiError,
+    ShellyAuthError,
+    ShellyNotSupportedError,
+)
 from .const import (
     CONF_BACKFILL_HOURS,
-    CONF_SCAN_INTERVAL,
     DEFAULT_BACKFILL_HOURS,
     DEFAULT_NAME,
     DEFAULT_SCAN_INTERVAL,
@@ -66,7 +77,7 @@ class ShellyPhaseNettingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         schema = vol.Schema({
             vol.Required(CONF_HOST): str,
             vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
-            vol.Optional(CONF_USERNAME, default="admin"): str,
+            vol.Optional(CONF_USERNAME, default=SHELLY_USERNAME): str,
             vol.Optional(CONF_PASSWORD): str,
             vol.Required(CONF_BACKFILL_HOURS, default=DEFAULT_BACKFILL_HOURS): vol.All(
                 vol.Coerce(int), vol.Range(min=0, max=MAX_BACKFILL_HOURS)
@@ -93,7 +104,7 @@ class ShellyPhaseNettingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         schema = vol.Schema({
             vol.Optional(
-                CONF_USERNAME, default=entry.data.get(CONF_USERNAME, "admin")
+                CONF_USERNAME, default=entry.data.get(CONF_USERNAME, SHELLY_USERNAME)
             ): str,
             vol.Required(CONF_PASSWORD): str,
         })
@@ -127,7 +138,7 @@ class ShellyPhaseNettingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         current = user_input or entry.data
         schema = vol.Schema({
             vol.Required(CONF_HOST, default=current.get(CONF_HOST, "")): str,
-            vol.Optional(CONF_USERNAME, default=current.get(CONF_USERNAME) or "admin"): str,
+            vol.Optional(CONF_USERNAME, default=current.get(CONF_USERNAME) or SHELLY_USERNAME): str,
             vol.Optional(CONF_PASSWORD): str,
         })
         return self.async_show_form(step_id="reconfigure", data_schema=schema, errors=errors)
